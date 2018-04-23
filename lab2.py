@@ -23,7 +23,8 @@ import numpy as np
 при использовании одного, двух, трех мест на стоянке. 
 Определить оптимальное числа мест на стоянке. 
 В каждом из этих случаев надо моделировать работу в течение восьмичасового рабочего дня
- и оценить долю клиентов, оставшихся без обслуживания"""
+ и оценить долю клиентов, оставшихся без обслуживания
+ """
 
 # create environment
 env = simpy.Environment()
@@ -66,23 +67,23 @@ def car(env, res: list, start_time):
                 yield m1_req
                 yield m2_req
                 yield b_req
-                if (res_m1 or res_m2) and res_b:
+                if (m1_req or m2_req) and b_req:
                     t_service_m, t_service_b = get_time_service(True), get_time_service(False)
                     yield env.timeout(t_service_m)
                     yield env.timeout(t_service_b)
                     len_queue -= 1
                     car_coplete += 1
             if is_bal and not is_mount:
-                res_b = yield b_req
-                if res_b:
+                yield b_req
+                if b_req:
                     t_service_b = get_time_service(False)
                     yield env.timeout(t_service_b)
                     len_queue -= 1
                     car_coplete += 1
             if not is_bal and is_mount:
-                res_m1 = yield m1_req
-                res_m2 = yield m2_req
-                if res_m1 or res_m2:
+                yield m1_req
+                yield m2_req
+                if m1_req or m2_req:
                     t_service_m = get_time_service(True)
                     yield env.timeout(t_service_m)
                     len_queue -= 1
@@ -99,7 +100,7 @@ sim_time = 8 * 60  # Время симуляции - 60 * 12 = 720 минут
 client_num = list(np.random.poisson(0.1, 120))
 
 time_car = np.cumsum(np.random.poisson(35, 100))
-time_car = list(filter(lambda tm: tm < sim_time, time_car))
+
 print(time_car)
 
 for t in time_car:
