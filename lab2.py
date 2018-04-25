@@ -26,19 +26,9 @@ import numpy as np
  и оценить долю клиентов, оставшихся без обслуживания
  """
 
-# create environment
-env = simpy.Environment()
-mounting_1 = simpy.Resource(env=env, capacity=1)
-mounting_2 = simpy.Resource(env=env, capacity=1)
-balancing = simpy.Resource(env=env, capacity=1)
 
-
-max_len_queue = 3
-len_queue = 0
-
-
-def get_time_service(is_mounting=True):
-    return np.random.exponential(45) if is_mounting else np.random.exponential(15)
+def get_time_service(is_mount=True):
+    return np.random.exponential(45) if is_mount else np.random.exponential(15)
 
 
 def get_type_service():
@@ -55,7 +45,7 @@ def car(env, res: list, start_time):
     global len_queue
     global max_len_queue
     global car_losses
-    global car_coplete
+    global car_complete
     m1, m2, b = res
     yield env.timeout(start_time)
     if not len_queue + 1 > max_len_queue:
@@ -64,49 +54,47 @@ def car(env, res: list, start_time):
         is_bal, is_mount = services['is_balancing'], services['is_mounting']
         with m1.request() as m1_req, m2.request() as m2_req, b.request() as b_req:
             if is_bal and is_mount:
-                yield m1_req
-                yield m2_req
-                yield b_req
-                if (m1_req or m2_req) and b_req:
-                    t_service_m, t_service_b = get_time_service(True), get_time_service(False)
-                    yield env.timeout(t_service_m)
-                    yield env.timeout(t_service_b)
-                    len_queue -= 1
-                    car_coplete += 1
+                yield (m1_req & b_req) | (m2_req & b_req)
+                env.timeout(get_time_service(is_mount=True) + get_time_service(is_mount=False))
+                len_queue -= 1
+                car_complete += 1
             if is_bal and not is_mount:
                 yield b_req
-                if b_req:
-                    t_service_b = get_time_service(False)
-                    yield env.timeout(t_service_b)
-                    len_queue -= 1
-                    car_coplete += 1
+                env.timeout(get_time_service(is_mount=False))
+                len_queue -= 1
+                car_complete += 1
             if not is_bal and is_mount:
-                yield m1_req
-                yield m2_req
-                if m1_req or m2_req:
-                    t_service_m = get_time_service(True)
-                    yield env.timeout(t_service_m)
-                    len_queue -= 1
-                    car_coplete += 1
+                yield m1_req | m2_req
+                env.timeout(get_time_service(is_mount=True))
+                len_queue -= 1
+                car_complete += 1
     else:
         car_losses += 1
 
 
-car_losses = 0
-car_coplete = 0
+if __name__ == '__main__':
 
+    # create environment
+    env = simpy.Environment()
+    mounting_1 = simpy.Resource(env=env, capacity=1)
+    mounting_2 = simpy.Resource(env=env, capacity=1)
+    balancing = simpy.Resource(env=env, capacity=1)
 
-sim_time = 8 * 60  # Время симуляции - 60 * 12 = 720 минут
-client_num = list(np.random.poisson(0.1, 120))
+    # may be equal 1, 2 or 3
+    max_len_queue = 1
+    len_queue = 0
 
-time_car = np.cumsum(np.random.poisson(35, 100))
+    car_losses = 0
+    car_complete = 0
 
-print(time_car)
+    sim_time = 8 * 60  # Время симуляции - 60 * 8 = 480 минут
 
-for t in time_car:
-    env.process(car(env, [mounting_1, mounting_2, balancing], t))
+    time_car = np.random.poisson(35, 100)
+    filter_car = np.cumsum(time_car) < sim_time
+    time_car = time_car[filter_car]
 
-env.run()
-print(car_coplete, car_losses)
+    for t in time_car:
+        env.process(car(env, [mounting_1, mounting_2, balancing], t))
 
-
+    env.run()
+    print(f'Машин обслужено = {car_complete}, машин пропущено = {car_losses}')
